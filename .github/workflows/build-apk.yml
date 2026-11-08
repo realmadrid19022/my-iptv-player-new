@@ -1,3 +1,4 @@
+
 name: Build MY IPTV APK
 
 on:
@@ -41,6 +42,20 @@ jobs:
 
       - name: Sync Android
         run: npx cap sync android
+
+      - name: Allow HTTP for IPTV server only
+        run: |
+          mkdir -p android/app/src/main/res/xml
+          cat > android/app/src/main/res/xml/network_security_config.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <network-security-config>
+              <base-config cleartextTrafficPermitted="false" />
+              <domain-config cleartextTrafficPermitted="true">
+                  <domain includeSubdomains="true">nv2live.com</domain>
+              </domain-config>
+          </network-security-config>
+          EOF
+          node --input-type=module -e "import fs from 'node:fs'; const p='android/app/src/main/AndroidManifest.xml'; let s=fs.readFileSync(p,'utf8'); if (!s.includes('android:networkSecurityConfig=')) { if (!s.includes('<application')) throw new Error('Application tag not found'); s=s.replace('<application', '<application android:networkSecurityConfig=\"@xml/network_security_config\"'); } fs.writeFileSync(p,s);"
 
       - name: Build APK
         run: |
