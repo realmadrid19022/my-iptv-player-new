@@ -1,6 +1,27 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { Capacitor, CapacitorHttp } from '@capacitor/core';
 import Hls from 'hls.js';
 import './App.css';
+
+async function getApiJson<T = unknown>(url: string): Promise<T> {
+  if (Capacitor.isNativePlatform()) {
+    const response = await CapacitorHttp.get({ url });
+
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(`تعذر الوصول إلى السيرفر (HTTP ${response.status})`);
+    }
+
+    return response.data as T;
+  }
+
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`تعذر الوصول إلى السيرفر (HTTP ${response.status})`);
+  }
+
+  return (await response.json()) as T;
+}
 
 type Channel = {
   stream_id: number;
@@ -314,29 +335,18 @@ export default function App() {
 
       const api = `${base}/player_api.php?${params.toString()}`;
 
-      const response = await fetch(api);
-
-      if (!response.ok) {
-        throw new Error('تعذر الوصول إلى السيرفر');
-      }
-
-      const account = await response.json();
+      const account = await getApiJson<{
+        user_info?: { auth?: number | string };
+      }>(api);
 
       if (!account.user_info || Number(account.user_info.auth) !== 1) {
         throw new Error('بيانات الدخول غير صحيحة أو الاشتراك غير فعال');
       }
 
-      const [categoryResponse, channelResponse] = await Promise.all([
-        fetch(`${api}&action=get_live_categories`),
-        fetch(`${api}&action=get_live_streams`),
+      const [categoryData, channelData] = await Promise.all([
+        getApiJson<Category[]>(`${api}&action=get_live_categories`),
+        getApiJson<Channel[]>(`${api}&action=get_live_streams`),
       ]);
-
-      if (!categoryResponse.ok || !channelResponse.ok) {
-        throw new Error('تعذر تحميل بيانات القنوات');
-      }
-
-      const categoryData = await categoryResponse.json();
-      const channelData = await channelResponse.json();
 
       setCategories(Array.isArray(categoryData) ? categoryData : []);
       setChannels(Array.isArray(channelData) ? channelData : []);
