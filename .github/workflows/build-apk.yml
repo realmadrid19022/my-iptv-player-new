@@ -1,0 +1,55 @@
+name: Build MY IPTV APK
+
+on:
+  workflow_dispatch:
+  push:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get project
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install packages
+        run: npm install
+
+      - name: Configure Vite for Android
+        run: |
+          node --input-type=module -e "import fs from 'node:fs'; const p='vite.config.ts'; let s=fs.readFileSync(p,'utf8'); if (!s.includes(\"base: './'\")) s=s.replace('defineConfig({', \"defineConfig({\\n  base: './',\"); fs.writeFileSync(p,s);"
+
+      - name: Build website
+        run: npm run build
+
+      - name: Add Android platform
+        run: |
+          if [ ! -d android ]; then
+            npx cap add android
+          fi
+
+      - name: Sync Android
+        run: npx cap sync android
+
+      - name: Build APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MY-IPTV-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
